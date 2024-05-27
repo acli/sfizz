@@ -1,4 +1,4 @@
-.TH sfizz_jack 1 "@MAN_TODAY@" "@CMAKE_PROJECT_VERSION@" "sfizz_jack man page"
+.TH sfizz_jack 1 "@MAN_TODAY@" "@CMAKE_PROJECT_VERSION@" "sfizz"
 .SH NAME
 sfizz_jack \- Launch a sfizz instance as a JACK client
 .SH SYNOPSIS
