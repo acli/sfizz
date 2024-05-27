@@ -225,45 +225,48 @@ void cliThreadProc()
         std::cout << "\n> ";
 
         std::string command;
-        std::getline(std::cin, command);
-        std::size_t pos = command.find(" ");
-        std::string kw = command.substr(0, pos);
-        std::string args = command.substr(pos + 1);
-        std::vector<std::string> tokens = stringTokenize(args);
+        if (std::getline(std::cin, command)) {
+	    std::size_t pos = command.find(" ");
+	    std::string kw = command.substr(0, pos);
+	    std::string args = command.substr(pos + 1);
+	    std::vector<std::string> tokens = stringTokenize(args);
 
-        if (kw == "load_instrument") {
-            try {
-                std::lock_guard<SpinMutex> lock { processMutex };
-                loadInstrument(tokens[0].c_str());
-            } catch (...) {
-                std::cout << "ERROR: Can't load instrument!\n";
-            }
-        } else if (kw == "set_oversampling") {
-            try {
-                std::lock_guard<SpinMutex> lock { processMutex };
-                synth.setOversamplingFactor(stoi(args));
-            } catch (...) {
-                std::cout << "ERROR: Can't set oversampling!\n";
-            }
-        } else if (kw == "set_preload_size") {
-            try {
-                std::lock_guard<SpinMutex> lock { processMutex };
-                synth.setPreloadSize(stoi(args));
-            } catch (...) {
-                std::cout << "ERROR: Can't set preload size!\n";
-            }
-        } else if (kw == "set_voices") {
-            try {
-                std::lock_guard<SpinMutex> lock { processMutex };
-                synth.setNumVoices(stoi(args));
-            } catch (...) {
-                std::cout << "ERROR: Can't set num of voices!\n";
-            }
-        } else if (kw == "quit") {
-            shouldClose = true;
-        } else if (kw.size() > 0) {
-            std::cout << "ERROR: Unknown command '" << kw << "'!\n";
-        }
+	    if (kw == "load_instrument") {
+		try {
+		    std::lock_guard<SpinMutex> lock { processMutex };
+		    loadInstrument(tokens[0].c_str());
+		} catch (...) {
+		    std::cout << "ERROR: Can't load instrument!\n";
+		}
+	    } else if (kw == "set_oversampling") {
+		try {
+		    std::lock_guard<SpinMutex> lock { processMutex };
+		    synth.setOversamplingFactor(stoi(args));
+		} catch (...) {
+		    std::cout << "ERROR: Can't set oversampling!\n";
+		}
+	    } else if (kw == "set_preload_size") {
+		try {
+		    std::lock_guard<SpinMutex> lock { processMutex };
+		    synth.setPreloadSize(stoi(args));
+		} catch (...) {
+		    std::cout << "ERROR: Can't set preload size!\n";
+		}
+	    } else if (kw == "set_voices") {
+		try {
+		    std::lock_guard<SpinMutex> lock { processMutex };
+		    synth.setNumVoices(stoi(args));
+		} catch (...) {
+		    std::cout << "ERROR: Can't set num of voices!\n";
+		}
+	    } else if (kw == "quit") {
+		shouldClose = true;
+	    } else if (kw.size() > 0) {
+		std::cout << "ERROR: Unknown command '" << kw << "'!\n";
+	    }
+	} else {
+	    shouldClose = true;
+	}
     }
 }
 
