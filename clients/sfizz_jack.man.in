@@ -2,17 +2,17 @@
 .SH NAME
 sfizz_jack \- Launch a sfizz instance as a JACK client
 .SH SYNOPSIS
-sfizz_jack [FILE] [OPTIONS...]
+sfizz_jack [\fIFILE\fR] [\fIOPTIONS\fR...]
 .SH DESCRIPTION
 sfizz_jack wraps the sfizz SFZ library in a JACK client that can be controlled by a text interface.
 .SH OPTIONS
 .IP FILE
-An optional SFZ file name to load at firsts
+An optional SFZ file name to load on startup
 .IP "--client_name"
 Name for the JACK client
-.IP "--num_voices NUMBER"
+.IP "--num_voices \fINUMBER\fR"
 Change the maximum polyphony
-.IP "--preload_size NUMBER"
+.IP "--preload_size \fINUMBER\fR"
 Bytes to preload in cache for samples
 .IP "--state"
 Output the state in the JACK loop
@@ -23,9 +23,11 @@ It is possible it interact with the JACK client through the standard input.
 The possible commands are
 .IP "load_instrument FILE"
 Load an instrument
-.IP "set_preload_size NUMBER"
+.IP "set_oversampling \fINUMBER\fR"
+Change the oversampling factor
+.IP "set_preload_size \fINUMBER\fR"
 Set the number of bytes to preload in cache for samples
-.IP "set_voices NUMBER"
+.IP "set_voices \fINUMBER\fR"
 Change the maximum polyphony
 .IP quit
 Quit
