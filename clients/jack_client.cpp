@@ -259,6 +259,8 @@ void cliThreadProc()
             } catch (...) {
                 std::cout << "ERROR: Can't set num of voices!\n";
             }
+        } else if (!std::cin) {
+            shouldClose = true;
         } else if (kw == "quit") {
             shouldClose = true;
         } else if (kw.size() > 0) {
