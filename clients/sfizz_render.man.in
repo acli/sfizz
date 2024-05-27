@@ -3,7 +3,13 @@
 sfizz_render \- render a MIDI file as a WAV file using an SFZ instrument description
 .SH SYNOPSIS
 .B sfizz_render
---sfz \fIFILE\fR --wav \fIFILE\fR --midi \fIFILE\fR [\fIOPTIONS\fR...]
+.B --sfz
+.I FILE
+.B --wav
+.I FILE
+.B --midi
+.I FILE
+[\fIOPTIONS\fR...]
 .SH DESCRIPTION
 sfizz_render uses the sfizz SFZ library to render a MIDI file into a sound file using an SFZ description file and its associated samples.
 .SH OPTIONS
