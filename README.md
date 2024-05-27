@@ -36,7 +36,7 @@ On any operating system, you might prefer to [build from source]!
 
 There is actually many things anyone can do, programming-related or music-related.
 Please check out the [CONTRIBUTING] document for information about filing bug reports or feature requests,
-and helping the development of sfizz
+and helping the development of sfizz.
 
 ## Donating to sfizz
 
@@ -45,15 +45,17 @@ who choose to use their free time to benefit this project.
 We firmly believe in the honesty and goodwill of users as a whole,
 and we want to promote a healthy relationship to software and to the cost of producing quality software.
 
-No financial returns is explicitely required from using sfizz in any shape.
-However, if you feel that sfizz produces value for you or your products,
-and if you find that your financial situation allows for it, we put together ways to donate to the project.
-You are never compelled to do so, the [CONTRIBUTING] file contains different ways to contribute.
+No financial contribution is explicitly required for using sfizz in any shape.
+However, if you feel that sfizz provides value for you or your products,
+and if your financial situation allows for it, we have put together ways to donate to the project.
+
+The [CONTRIBUTING] file describes others ways to contribute,
+but again, you are never compelled to do so.
 
 In all of sfizz's governance model, we strive to live in the open.
-Finances are no different, and we put in place a process so that the use of donations
+Finances are no different, and we have put in place a process so that the use of donations
 is as transparent as possible through our [Open Collective].
-We invite you to check out the [GOVERNANCE] file to see how the organization is governed and how are donations handled.
+We invite you to check out the [GOVERNANCE] file to see how the organization is governed and how donations are handled.
 
 ## Dependencies and licenses
 
