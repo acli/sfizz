@@ -34,13 +34,13 @@ On any operating system, you might prefer to [build from source]!
 
 ## Contributing to sfizz
 
-There is actually many things anyone can do, programming-related or music-related.
+There are actually many things anyone can do, programming-related or music-related.
 Please check out the [CONTRIBUTING] document for information about filing bug reports or feature requests,
 and helping the development of sfizz.
 
 ## Donating to sfizz
 
-Sfizz and the work in the SFZ tools organization is purely driven by hobbyists
+Sfizz and the work in the SFZ tools organization are purely driven by hobbyists
 who choose to use their free time to benefit this project.
 We firmly believe in the honesty and goodwill of users as a whole,
 and we want to promote a healthy relationship to software and to the cost of producing quality software.
