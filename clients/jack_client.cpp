@@ -508,7 +508,7 @@ int main(int argc, char** argv)
     std::cout << "Closing..." << '\n';
     jack_client_close(client);
     cli_thread.join();
-#ifndef NDEBUG
+#if SFIZZ_JACK_USE_ALSA
     alsa_thread.join();
 #endif
     return 0;
