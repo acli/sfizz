@@ -284,10 +284,11 @@ void alsaThreadProc ()
 	int npfds = snd_seq_poll_descriptors_count(seq, POLLIN);
 	struct pollfd pfds[npfds];
 	while (!shouldClose) {
-	    if (snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN)) {
+	    int numMidiEvents = snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN);
+	    for (int i = 0; i < numMidiEvents; i += 1) {
 		snd_seq_event_t *event;
 		int err = snd_seq_event_input(seq, &event);
-		if (err == -EAGAIN) {
+		if (err == -EAGAIN) {	// no event - this should never happen
 		    ;
 		} else if (err == -ENOSPC) {
 		    std::cout << "ALSA event queue overrun\n";

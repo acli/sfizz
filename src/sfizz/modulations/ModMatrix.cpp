@@ -386,7 +386,10 @@ void ModMatrix::endVoice()
 float* ModMatrix::getModulation(TargetId targetId)
 {
     if (!validTarget(targetId))
+    {
+	std::cerr << "GOT HERE !validTarget\n";
         return nullptr;
+    }
 
     Impl& impl = *impl_;
     const NumericId<Region> regionId = impl.currentRegionId_;
@@ -400,7 +403,10 @@ float* ModMatrix::getModulation(TargetId targetId)
 
     // only accept per-voice targets of the same region
     if ((targetFlags & kModIsPerVoice) && regionId != target.key.region())
+    {
+	std::cerr << "GOT HERE (targetFlags & kModIsPerVoice) && regionId != target.key.region()\n";
         return nullptr;
+    }
 
     // check if already processed
     if (target.bufferReady)
