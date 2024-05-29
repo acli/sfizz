@@ -57,7 +57,7 @@ static jack_client_t* client;
 static SpinMutex processMutex;
 #if SFIZZ_JACK_USE_ALSA
 static snd_seq_t *seq;
-static snd_seq_addr_t alsaMidiIn;
+static snd_seq_addr_t alsaMidiInputPort;
 #endif
 
 static volatile sig_atomic_t shouldClose { false };
@@ -137,46 +137,42 @@ void alsaThreadProc ()
             int numMidiEvents = snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN);
 
             // Midi dispatching
-            for (int i = 0; i < numMidiEvents; i += 1) {
+            for (int i = 0; i < numMidiEvents; ++i) {
                 snd_seq_event_t *event;
                 int err = snd_seq_event_input(seq, &event);
-                if (err == -EAGAIN) {	// no event - this should never happen
-                    ;
-                } else if (err == -ENOSPC) {
-                    std::cout << "ALSA event queue overrun\n";
-                } else if (err < 0) {
-                    std::cout << "ALSA returned unknown error " << err << "\n";
-                } else if (event) {
-                    switch (event->type) {
-                    case SND_SEQ_EVENT_NOTEOFF:
-                    case SND_SEQ_EVENT_NOTEON:
-                        if (event->type == SND_SEQ_EVENT_NOTEOFF || event->data.note.velocity == 0) {
-                            synth.noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
-                        } else {
-                            synth.noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
-                        }
-                        break;
-                    case SND_SEQ_EVENT_KEYPRESS:
-                        synth.polyAftertouch(event->time.tick, event->data.note.note, event->data.note.velocity);
-                        break;
-                    case SND_SEQ_EVENT_CONTROLLER:
-                        synth.cc(event->time.tick, event->data.control.param, event->data.control.value);
-                        break;
-                    case SND_SEQ_EVENT_PGMCHANGE:
-                        // Not implemented
-                        break;
-                    case SND_SEQ_EVENT_CHANPRESS:
-                        synth.channelAftertouch(event->time.tick, event->data.control.value);
-                        break;
-                    case SND_SEQ_EVENT_PITCHBEND:
-                        synth.pitchWheel(event->time.tick, event->data.control.value);
-                        break;
-                    case SND_SEQ_EVENT_SYSEX:	// ?
-                        // Not implemented
-                        break;
+                if (err < 0)     // -EAGAIN (no event, which should not happen), -ENOSPC (queue overrun), or something unexpected
+                    continue;
+
+                if (!event)
+                    continue;
+
+                switch (event->type) {
+                case SND_SEQ_EVENT_NOTEOFF:
+                case SND_SEQ_EVENT_NOTEON:
+                    if (event->type == SND_SEQ_EVENT_NOTEOFF || event->data.note.velocity == 0) {
+                        synth.noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
+                    } else {
+                        synth.noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
                     }
-                } else {
-                    std::cout << "Unexpected ALSA error: snd_seq_event_input returned no error but no event\n";
+                    break;
+                case SND_SEQ_EVENT_KEYPRESS:
+                    synth.polyAftertouch(event->time.tick, event->data.note.note, event->data.note.velocity);
+                    break;
+                case SND_SEQ_EVENT_CONTROLLER:
+                    synth.cc(event->time.tick, event->data.control.param, event->data.control.value);
+                    break;
+                case SND_SEQ_EVENT_PGMCHANGE:
+                    // Not implemented
+                    break;
+                case SND_SEQ_EVENT_CHANPRESS:
+                    synth.channelAftertouch(event->time.tick, event->data.control.value);
+                    break;
+                case SND_SEQ_EVENT_PITCHBEND:
+                    synth.pitchWheel(event->time.tick, event->data.control.value);
+                    break;
+                case SND_SEQ_EVENT_SYSEX:	// ?
+                    // Not implemented
+                    break;
                 }
             }
             std::this_thread::yield();
@@ -469,12 +465,12 @@ int main(int argc, char** argv)
     }
 #if SFIZZ_JACK_USE_ALSA
     if (portName.length() > 0) {
-        alsa_err = snd_seq_parse_address(seq, &alsaMidiIn, portName.c_str());
+        alsa_err = snd_seq_parse_address(seq, &alsaMidiInputPort, portName.c_str());
         if (alsa_err < 0) {
             std::cerr << "Could not parse port name " << portName << ": " << snd_strerror(alsa_err) << '\n';
             return 1;
         }
-        alsa_err = snd_seq_connect_from(seq, 0, alsaMidiIn.client, alsaMidiIn.port);
+        alsa_err = snd_seq_connect_from(seq, 0, alsaMidiInputPort.client, alsaMidiInputPort.port);
         if (alsa_err < 0) {
             std::cerr << "Could not connect to " << portName << ": " << snd_strerror(alsa_err) << '\n';
             return 1;
