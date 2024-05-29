@@ -327,9 +327,9 @@ void alsaThreadProc ()
                     std::cout << "Unexpected ALSA error: snd_seq_event_input returned no error but no event\n";
                 }
             }
+            std::this_thread::yield();
         }
     }
-    std::cout << "GOT HERE thread exited\n";
 }
 #endif
 
