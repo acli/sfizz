@@ -296,13 +296,13 @@ void alsaThreadProc ()
 		    std::cout << "ALSA returned unknown error " << err << "\n";
 		} else if (event) {
 		    switch (event->type) {
-		    case SND_SEQ_EVENT_NOTEOFF: noteoff:
-			synth.noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
-			break;
+		    case SND_SEQ_EVENT_NOTEOFF:
 		    case SND_SEQ_EVENT_NOTEON:
-			if (event->data.note.velocity == 0)
-			    goto noteoff;
-			synth.noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
+			if (event->type == SND_SEQ_EVENT_NOTEOFF || event->data.note.velocity == 0) {
+			    synth.noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
+			} else {
+			    synth.noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
+			}
 			break;
 		    case SND_SEQ_EVENT_KEYPRESS:
 			synth.polyAftertouch(event->time.tick, event->data.note.note, event->data.note.velocity);
