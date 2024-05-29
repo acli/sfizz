@@ -402,27 +402,18 @@ int main(int argc, char** argv)
         std::cout << "Connected to JACK" << '\n';
     }
 #if SFIZZ_JACK_USE_ALSA
-    if (portName.length() > 0) {
-	int err;
-	err = snd_seq_open(&seq, "default", SND_SEQ_OPEN_INPUT, SND_SEQ_NONBLOCK);
-	if (err < 0) {
-	    std::cerr << "Could not open ALSA sequencer: " << snd_strerror(err) << '\n';
-	    return 1;
-	}
-	err = snd_seq_create_simple_port(seq, "input",
-					 SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
-					 SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
-	if (err < 0) {
-	    std::cerr << "Could not create ALSA port: " << snd_strerror(err) << '\n';
-	    return 1;
-	}
-	err = snd_seq_set_client_name(seq, clientName.c_str());
-	if (err < 0) {
-	    std::cerr << "Could not set ALSA client name: " << snd_strerror(err) << '\n';
-	    return 1;
-	}
-	std::cout << "Connected to ALSA\n";
+    int alsa_err;
+    alsa_err = snd_seq_open(&seq, "default", SND_SEQ_OPEN_INPUT, SND_SEQ_NONBLOCK);
+    if (alsa_err < 0) {
+	std::cerr << "Could not open ALSA sequencer: " << snd_strerror(alsa_err) << '\n';
+	return 1;
     }
+    alsa_err = snd_seq_set_client_name(seq, clientName.c_str());
+    if (alsa_err < 0) {
+	std::cerr << "Could not set ALSA client name: " << snd_strerror(alsa_err) << '\n';
+	return 1;
+    }
+    std::cout << "Connected to ALSA\n";
 #endif
 
     synth.setSamplesPerBlock(jack_get_buffer_size(client));
@@ -438,17 +429,10 @@ int main(int argc, char** argv)
         return 1;
     }
 #if SFIZZ_JACK_USE_ALSA
-    if (seq) {
-	int err = snd_seq_parse_address(seq, &alsaMidiIn, portName.c_str());
-	if (err < 0) {
-	    std::cerr << portName << ": " << snd_strerror(err) << '\n';
-	    return 1;
-	}
-	err = snd_seq_connect_from(seq, 0, alsaMidiIn.client, alsaMidiIn.port);
-	if (err < 0) {
-	    std::cerr << "Could not connect to " << portName << ": " << snd_strerror(err) << '\n';
-	    return 1;
-	}
+    alsa_err = snd_seq_create_simple_port(seq, "input", SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+    if (alsa_err < 0) {
+	std::cerr << "Could not open ALSA MIDI input port: " << snd_strerror(alsa_err) << '\n';
+	return 1;
     }
 #endif
 
@@ -480,6 +464,20 @@ int main(int argc, char** argv)
         }
         jack_free(systemPorts);
     }
+#if SFIZZ_JACK_USE_ALSA
+    if (portName.length() > 0) {
+	alsa_err = snd_seq_parse_address(seq, &alsaMidiIn, portName.c_str());
+	if (alsa_err < 0) {
+	    std::cerr << "Could not parse port name " << portName << ": " << snd_strerror(alsa_err) << '\n';
+	    return 1;
+	}
+	alsa_err = snd_seq_connect_from(seq, 0, alsaMidiIn.client, alsaMidiIn.port);
+	if (alsa_err < 0) {
+	    std::cerr << "Could not connect to " << portName << ": " << snd_strerror(alsa_err) << '\n';
+	    return 1;
+	}
+    }
+#endif
 
     if (!filesToParse.empty() && filesToParse[0]) {
         loadInstrument(filesToParse[0]);
