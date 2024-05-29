@@ -335,13 +335,13 @@ void alsaThreadProc ()
 
 
 ABSL_FLAG(std::string, client_name, "sfizz", "Jack client name");
-#if SFIZZ_JACK_USE_ALSA
-ABSL_FLAG(std::string, port, "", "ALSA port for MIDI in");
-#endif
 ABSL_FLAG(std::string, oversampling, "1x", "Internal oversampling factor (value values are x1, x2, x4, x8)");
 ABSL_FLAG(uint32_t, preload_size, 8192, "Preloaded size");
 ABSL_FLAG(uint32_t, num_voices, 32, "Num of voices");
 ABSL_FLAG(bool, jack_autoconnect, false, "Autoconnect audio output");
+#if SFIZZ_JACK_USE_ALSA
+ABSL_FLAG(std::string, port, "", "Connect to this ALSA port for MIDI input");
+#endif
 ABSL_FLAG(bool, state, false, "Output the synth state in the jack loop");
 
 int main(int argc, char** argv)
@@ -362,7 +362,7 @@ int main(int argc, char** argv)
     std::cout << "Flags" << '\n';
     std::cout << "- Client name: " << clientName << '\n';
 #if SFIZZ_JACK_USE_ALSA
-    std::cout << "- ALSA port: " << portName.length() << 'H' << portName << '\n';
+    std::cout << "- ALSA port: " << portName << '\n';
 #endif
     std::cout << "- Oversampling: " << oversampling << '\n';
     std::cout << "- Preloaded size: " << preload_size << '\n';
