@@ -60,6 +60,8 @@ static snd_seq_t *seq;
 static snd_seq_addr_t alsaMidiIn;
 #endif
 
+static volatile sig_atomic_t shouldClose { false };
+
 int process(jack_nframes_t numFrames, void* arg)
 {
     auto* synth = reinterpret_cast<sfz::Sfizz*>(arg);
@@ -130,8 +132,11 @@ void alsaThreadProc ()
     if (seq) {
         int npfds = snd_seq_poll_descriptors_count(seq, POLLIN);
         struct pollfd pfds[npfds];
+
         while (!shouldClose) {
             int numMidiEvents = snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN);
+
+            // Midi dispatching
             for (int i = 0; i < numMidiEvents; i += 1) {
                 snd_seq_event_t *event;
                 int err = snd_seq_event_input(seq, &event);
@@ -203,8 +208,6 @@ int sampleRateChanged(jack_nframes_t nframes, void* arg)
     synth->setSampleRate(nframes);
     return 0;
 }
-
-static volatile sig_atomic_t shouldClose { false };
 
 static void done(int sig)
 {
