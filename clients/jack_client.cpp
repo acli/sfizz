@@ -1,5 +1,6 @@
 // Copyright (c) 2019, Paul Ferrand
 // All rights reserved.
+// Modified 2024 by Ambrose Li with reference to aseqdump.c (c) 2005 Clemens Ladisch
 
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -43,6 +44,9 @@
 #include <mutex>
 #include <algorithm>
 #include <vector>
+#if SFIZZ_JACK_USE_ALSA
+#include "alsa/asoundlib.h"
+#endif
 
 sfz::Sfizz synth;
 
@@ -51,6 +55,10 @@ static jack_port_t* outputPort1;
 static jack_port_t* outputPort2;
 static jack_client_t* client;
 static SpinMutex processMutex;
+#if SFIZZ_JACK_USE_ALSA
+static snd_seq_t *seq;
+static snd_seq_addr_t alsaMidiIn;
+#endif
 
 int process(jack_nframes_t numFrames, void* arg)
 {
@@ -259,6 +267,8 @@ void cliThreadProc()
             } catch (...) {
                 std::cout << "ERROR: Can't set num of voices!\n";
             }
+	} else if (!std::cin) {			/* XYZZY */
+            shouldClose = true;			/* XYZZY */
         } else if (kw == "quit") {
             shouldClose = true;
         } else if (kw.size() > 0) {
@@ -267,7 +277,66 @@ void cliThreadProc()
     }
 }
 
+#if SFIZZ_JACK_USE_ALSA
+void alsaThreadProc ()
+{
+    if (seq) {
+	int npfds = snd_seq_poll_descriptors_count(seq, POLLIN);
+	struct pollfd pfds[npfds];
+	while (!shouldClose) {
+	    if (snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN)) {
+		snd_seq_event_t *event;
+		int err = snd_seq_event_input(seq, &event);
+		if (err == -EAGAIN) {
+		    ;
+		} else if (err == -ENOSPC) {
+		    std::cout << "ALSA event queue overrun\n";
+		} else if (err < 0) {
+		    std::cout << "ALSA returned unknown error " << err << "\n";
+		} else if (event) {
+		    switch (event->type) {
+		    case SND_SEQ_EVENT_NOTEOFF: noteoff:
+			synth.noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
+			break;
+		    case SND_SEQ_EVENT_NOTEON:
+			if (event->data.note.velocity == 0)
+			    goto noteoff;
+			synth.noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
+			break;
+		    case SND_SEQ_EVENT_KEYPRESS:
+			synth.polyAftertouch(event->time.tick, event->data.note.note, event->data.note.velocity);
+			break;
+		    case SND_SEQ_EVENT_CONTROLLER:
+			synth.cc(event->time.tick, event->data.control.param, event->data.control.value);
+			break;
+		    case SND_SEQ_EVENT_PGMCHANGE:
+			// Not implemented
+			break;
+		    case SND_SEQ_EVENT_CHANPRESS:
+			synth.channelAftertouch(event->time.tick, event->data.control.value);
+			break;
+		    case SND_SEQ_EVENT_PITCHBEND:
+			synth.pitchWheel(event->time.tick, event->data.control.value);
+			break;
+		    case SND_SEQ_EVENT_SYSEX:	// ?
+			// Not implemented
+			break;
+		    }
+		} else {
+		    std::cout << "Unexpected ALSA error: snd_seq_event_input returned no error but no event\n";
+		}
+	    }
+	}
+    }
+    std::cout << "GOT HERE thread exited\n";
+}
+#endif
+
+
 ABSL_FLAG(std::string, client_name, "sfizz", "Jack client name");
+#if SFIZZ_JACK_USE_ALSA
+ABSL_FLAG(std::string, port, "", "ALSA port for MIDI in");
+#endif
 ABSL_FLAG(std::string, oversampling, "1x", "Internal oversampling factor (value values are x1, x2, x4, x8)");
 ABSL_FLAG(uint32_t, preload_size, 8192, "Preloaded size");
 ABSL_FLAG(uint32_t, num_voices, 32, "Num of voices");
@@ -280,6 +349,9 @@ int main(int argc, char** argv)
 
     auto filesToParse = absl::MakeConstSpan(arguments).subspan(1);
     const std::string clientName = absl::GetFlag(FLAGS_client_name);
+#if SFIZZ_JACK_USE_ALSA
+    const std::string portName = absl::GetFlag(FLAGS_port);
+#endif
     const std::string oversampling = absl::GetFlag(FLAGS_oversampling);
     const uint32_t preload_size = absl::GetFlag(FLAGS_preload_size);
     const uint32_t num_voices = absl::GetFlag(FLAGS_num_voices);
@@ -288,6 +360,9 @@ int main(int argc, char** argv)
 
     std::cout << "Flags" << '\n';
     std::cout << "- Client name: " << clientName << '\n';
+#if SFIZZ_JACK_USE_ALSA
+    std::cout << "- ALSA port: " << portName.length() << 'H' << portName << '\n';
+#endif
     std::cout << "- Oversampling: " << oversampling << '\n';
     std::cout << "- Preloaded size: " << preload_size << '\n';
     std::cout << "- Num of voices: " << num_voices << '\n';
@@ -326,6 +401,29 @@ int main(int argc, char** argv)
     if (status & JackServerStarted) {
         std::cout << "Connected to JACK" << '\n';
     }
+#if SFIZZ_JACK_USE_ALSA
+    if (portName.length() > 0) {
+	int err;
+	err = snd_seq_open(&seq, "default", SND_SEQ_OPEN_INPUT, SND_SEQ_NONBLOCK);
+	if (err < 0) {
+	    std::cerr << "Could not open ALSA sequencer: " << snd_strerror(err) << '\n';
+	    return 1;
+	}
+	err = snd_seq_create_simple_port(seq, "input",
+					 SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
+					 SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+	if (err < 0) {
+	    std::cerr << "Could not create ALSA port: " << snd_strerror(err) << '\n';
+	    return 1;
+	}
+	err = snd_seq_set_client_name(seq, clientName.c_str());
+	if (err < 0) {
+	    std::cerr << "Could not set ALSA client name: " << snd_strerror(err) << '\n';
+	    return 1;
+	}
+	std::cout << "Connected to ALSA\n";
+    }
+#endif
 
     synth.setSamplesPerBlock(jack_get_buffer_size(client));
     synth.setSampleRate(jack_get_sample_rate(client));
@@ -339,6 +437,20 @@ int main(int argc, char** argv)
         std::cerr << "Could not open MIDI input port" << '\n';
         return 1;
     }
+#if SFIZZ_JACK_USE_ALSA
+    if (seq) {
+	int err = snd_seq_parse_address(seq, &alsaMidiIn, portName.c_str());
+	if (err < 0) {
+	    std::cerr << portName << ": " << snd_strerror(err) << '\n';
+	    return 1;
+	}
+	err = snd_seq_connect_from(seq, 0, alsaMidiIn.client, alsaMidiIn.port);
+	if (err < 0) {
+	    std::cerr << "Could not connect to " << portName << ": " << snd_strerror(err) << '\n';
+	    return 1;
+	}
+    }
+#endif
 
     outputPort1 = jack_port_register(client, "output_1", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
     outputPort2 = jack_port_register(client, "output_2", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
@@ -374,6 +486,9 @@ int main(int argc, char** argv)
     }
 
     std::thread cli_thread(cliThreadProc);
+#if SFIZZ_JACK_USE_ALSA
+    std::thread alsa_thread(alsaThreadProc);
+#endif
 
     signal(SIGHUP, done);
     signal(SIGINT, done);
@@ -394,5 +509,8 @@ int main(int argc, char** argv)
     std::cout << "Closing..." << '\n';
     jack_client_close(client);
     cli_thread.join();
+#ifndef NDEBUG
+    alsa_thread.join();
+#endif
     return 0;
 }

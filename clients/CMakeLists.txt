@@ -9,6 +9,14 @@ if(SFIZZ_JACK)
         sfizz::sfizz
         sfizz::spin_mutex
     )
+    if(SFIZZ_JACK_USE_ALSA)
+	add_compile_definitions(
+	    SFIZZ_JACK_USE_ALSA
+	)
+	target_link_libraries(sfizz_jack PRIVATE
+	    asound
+	)
+    endif()
     sfizz_enable_lto_if_needed(sfizz_jack)
     configure_file(sfizz_jack.man.in sfizz_jack.man @ONLY)
     install(TARGETS sfizz_jack
