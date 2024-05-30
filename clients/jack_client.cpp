@@ -140,16 +140,8 @@ int process_alsa(snd_seq_event_t *event, sfz::Sfizz *synth)
         return 0;
     }
 
-    const int numMidiEvents = 1;     // XXX
-
     // Midi dispatching
-    for (uint32_t i = 0; i < numMidiEvents; ++i) {
-//        if (snd_seq_event_input(alsa_client, &event) < 0)
-//            continue;
-
-        if (!event)
-            continue;
-
+    if (event) {
         switch (event->type) {
         case SND_SEQ_EVENT_NOTEOFF: noteoff:
             synth->noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
