@@ -334,7 +334,6 @@ void cliThreadProc()
 
 void alsaThreadProc()
 {
-    std::cout << "ALSA THREAD STARTED!\n";
     if (alsa_client) {
         while (!shouldClose) {
             snd_seq_event_t *event;
@@ -348,7 +347,6 @@ void alsaThreadProc()
             }
         }
     }
-    std::cout << "ALSA THREAD EXITING!\n";
 }
 
 #if SFIZZ_JACK_USE_ALSA
