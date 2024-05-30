@@ -25,6 +25,7 @@ set(BUILD_TESTING OFF CACHE BOOL "Disable Abseil's tests [default: OFF]")
 
 option_ex(ENABLE_LTO                "Enable Link Time Optimization" ON)
 option_ex(SFIZZ_JACK                "Enable JACK stand-alone build" CMAKE_SYSTEM_NAME STREQUAL "Linux")
+option_ex(SFIZZ_JACK_USE_ALSA       "Enable ALSA input port for JACK stand-alone build" CMAKE_SYSTEM_NAME STREQUAL "Linux")
 option_ex(SFIZZ_RENDER              "Enable renderer of SMF files" ON)
 option_ex(SFIZZ_BENCHMARKS          "Enable benchmarks build" OFF)
 option_ex(SFIZZ_TESTS               "Enable tests build" OFF)

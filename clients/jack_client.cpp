@@ -1,4 +1,5 @@
 // Copyright (c) 2019, Paul Ferrand
+// ALSA parts copyright (c) 2024, Ambrose Li
 // All rights reserved.
 
 // Redistribution and use in source and binary forms, with or without
@@ -43,6 +44,10 @@
 #include <mutex>
 #include <algorithm>
 #include <vector>
+#if SFIZZ_JACK_USE_ALSA
+#include <regex>
+#include "alsa/asoundlib.h"
+#endif
 
 sfz::Sfizz synth;
 
@@ -50,6 +55,10 @@ static jack_port_t* midiInputPort;
 static jack_port_t* outputPort1;
 static jack_port_t* outputPort2;
 static jack_client_t* client;
+#if SFIZZ_JACK_USE_ALSA
+static int alsaMidiInputPort;
+static snd_seq_t *alsa_client;
+#endif
 static SpinMutex processMutex;
 
 int process(jack_nframes_t numFrames, void* arg)
@@ -115,6 +124,68 @@ int process(jack_nframes_t numFrames, void* arg)
 
     return 0;
 }
+
+#if SFIZZ_JACK_USE_ALSA
+int process_alsa(snd_seq_event_t *event, sfz::Sfizz *synth)
+{
+    const int numFrames = 1;        // XXX
+
+    auto* leftOutput = reinterpret_cast<float*>(jack_port_get_buffer(outputPort1, numFrames));
+    auto* rightOutput = reinterpret_cast<float*>(jack_port_get_buffer(outputPort2, numFrames));
+
+    std::unique_lock<SpinMutex> lock { processMutex, std::try_to_lock };
+    if (!lock.owns_lock()) {
+        std::fill_n(leftOutput, numFrames, 0.0f);
+        std::fill_n(rightOutput, numFrames, 0.0f);
+        return 0;
+    }
+
+    const int numMidiEvents = 1;     // XXX
+
+    // Midi dispatching
+    for (uint32_t i = 0; i < numMidiEvents; ++i) {
+//        if (snd_seq_event_input(alsa_client, &event) < 0)
+//            continue;
+
+        if (!event)
+            continue;
+
+        switch (event->type) {
+        case SND_SEQ_EVENT_NOTEOFF: noteoff:
+            synth->noteOff(event->time.tick, event->data.note.note, event->data.note.velocity);
+            break;
+        case SND_SEQ_EVENT_NOTEON:
+            if (event->data.note.velocity == 0)
+                goto noteoff;
+            synth->noteOn(event->time.tick, event->data.note.note, event->data.note.velocity);
+            break;
+        case SND_SEQ_EVENT_KEYPRESS:
+            synth->polyAftertouch(event->time.tick, event->data.note.note, event->data.note.velocity);
+            break;
+        case SND_SEQ_EVENT_CONTROLLER:
+            synth->cc(event->time.tick, event->data.control.param, event->data.control.value);
+            break;
+        case SND_SEQ_EVENT_PGMCHANGE:
+            // Not implemented
+            break;
+        case SND_SEQ_EVENT_CHANPRESS:
+            synth->channelAftertouch(event->time.tick, event->data.control.value);
+            break;
+        case SND_SEQ_EVENT_PITCHBEND:
+            synth->pitchWheel(event->time.tick, event->data.control.value);
+            break;
+        case SND_SEQ_EVENT_SYSEX:       // ?
+            // Not implemented
+            break;
+        }
+    }
+
+    float* stereoOutput[] = { leftOutput, rightOutput };
+    synth->renderBlock(stereoOutput, numFrames);
+
+    return 0;
+}
+#endif
 
 int sampleBlockChanged(jack_nframes_t nframes, void* arg)
 {
@@ -269,7 +340,31 @@ void cliThreadProc()
     }
 }
 
+void alsaThreadProc()
+{
+    std::cout << "ALSA THREAD STARTED!\n";
+    if (alsa_client) {
+        while (!shouldClose) {
+            snd_seq_event_t *event;
+            int err = snd_seq_event_input(alsa_client, &event);
+            if (err == -EAGAIN) {       // no event;
+                std::this_thread::yield();
+            } else if (err < 0) {
+                std::cout << "DEBUG: snd_seq_event_input returned error " << err << "'" << snd_strerror(err) << "'\n";
+            } else {
+                process_alsa(event, &synth);
+            }
+        }
+    }
+    std::cout << "ALSA THREAD EXITING!\n";
+}
+
+#if SFIZZ_JACK_USE_ALSA
+ABSL_FLAG(std::string, client_name, "sfizz", "Jack/ALSA client name");
+ABSL_FLAG(std::string, port, "sfizz", "Connect to this MIDI input");
+#else
 ABSL_FLAG(std::string, client_name, "sfizz", "Jack client name");
+#endif
 ABSL_FLAG(std::string, oversampling, "1x", "Internal oversampling factor (value values are x1, x2, x4, x8)");
 ABSL_FLAG(uint32_t, preload_size, 8192, "Preloaded size");
 ABSL_FLAG(uint32_t, num_voices, 32, "Num of voices");
@@ -282,6 +377,9 @@ int main(int argc, char** argv)
 
     auto filesToParse = absl::MakeConstSpan(arguments).subspan(1);
     const std::string clientName = absl::GetFlag(FLAGS_client_name);
+#if SFIZZ_JACK_USE_ALSA
+    const std::string portName = absl::GetFlag(FLAGS_port);
+#endif
     const std::string oversampling = absl::GetFlag(FLAGS_oversampling);
     const uint32_t preload_size = absl::GetFlag(FLAGS_preload_size);
     const uint32_t num_voices = absl::GetFlag(FLAGS_num_voices);
@@ -290,6 +388,9 @@ int main(int argc, char** argv)
 
     std::cout << "Flags" << '\n';
     std::cout << "- Client name: " << clientName << '\n';
+#if SFIZZ_JACK_USE_ALSA
+    std::cout << "- Port: " << portName << '\n';
+#endif
     std::cout << "- Oversampling: " << oversampling << '\n';
     std::cout << "- Preloaded size: " << preload_size << '\n';
     std::cout << "- Num of voices: " << num_voices << '\n';
@@ -322,12 +423,30 @@ int main(int argc, char** argv)
         return 1;
     }
 
+#if SFIZZ_JACK_USE_ALSA
+    int err;
+    err = snd_seq_open(&alsa_client, "default", SND_SEQ_OPEN_INPUT, SND_SEQ_NONBLOCK);
+    if (err < 0) {
+        std::cerr << "Could not open ALSA client: " << snd_strerror(err) << '\n';
+        return 1;
+    }
+#endif
+
     if (status & JackNameNotUnique) {
         std::cout << "Name was taken: assigned " << jack_get_client_name(client) << "instead" << '\n';
     }
     if (status & JackServerStarted) {
         std::cout << "Connected to JACK" << '\n';
     }
+
+#if SFIZZ_JACK_USE_ALSA
+    err = snd_seq_set_client_name(alsa_client, jack_get_client_name(client));
+    if (err < 0) {
+        std::cerr << "Could not set ALSA client name: " << snd_strerror(err) << '\n';
+        return 1;
+    }
+    std::cout << "Connected to ALSA as client " << snd_seq_client_id(alsa_client) << '\n';
+#endif
 
     synth.setSamplesPerBlock(jack_get_buffer_size(client));
     synth.setSampleRate(jack_get_sample_rate(client));
@@ -341,6 +460,14 @@ int main(int argc, char** argv)
         std::cerr << "Could not open MIDI input port" << '\n';
         return 1;
     }
+
+#if SFIZZ_JACK_USE_ALSA
+    alsaMidiInputPort = snd_seq_create_simple_port(alsa_client, "Input", SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+    if (alsaMidiInputPort < 0) {
+        std::cerr << "Could not open ALSA MIDI input port: " << snd_strerror(alsaMidiInputPort) << '\n';
+        return 1;
+    }
+#endif
 
     outputPort1 = jack_port_register(client, "output_1", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
     outputPort2 = jack_port_register(client, "output_2", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
@@ -371,11 +498,39 @@ int main(int argc, char** argv)
         jack_free(systemPorts);
     }
 
+#if SFIZZ_JACK_USE_ALSA
+    if (portName.length() > 0) {
+        const std::regex alsa_port_pattern("([0-9]+):([0-9]+)");
+        std::smatch m;
+        if (std::regex_match(portName, m, alsa_port_pattern)) {
+            try {
+                err = snd_seq_connect_from(alsa_client, 0, std::stoi(m[1].str()), std::stoi(m[2].str()));
+                if (err < 0) {
+                    std::cerr << "Cannot connect to ALSA input port " << portName << ": " << snd_strerror(err) << '\n';
+                    return 1;
+                }
+            } catch (std::out_of_range const &e) {
+                std::cerr << "Invalid port specification\n";
+                return 1;
+            }
+        } else { // assume it's a JACK port
+            return 1;
+            err = jack_connect(client, portName.c_str(), jack_port_name(midiInputPort));
+            if (err) {
+                std::cerr << "Cannot connect to JACK input port " << portName << ": Error " << err << '\n';
+            }
+        }
+    }
+#endif
+
     if (!filesToParse.empty() && filesToParse[0]) {
         loadInstrument(filesToParse[0]);
     }
 
     std::thread cli_thread(cliThreadProc);
+#if SFIZZ_JACK_USE_ALSA
+    std::thread alsa_thread(alsaThreadProc);
+#endif
 
     signal(SIGHUP, done);
     signal(SIGINT, done);
@@ -396,5 +551,8 @@ int main(int argc, char** argv)
     std::cout << "Closing..." << '\n';
     jack_client_close(client);
     cli_thread.join();
+#if SFIZZ_JACK_USE_ALSA
+    alsa_thread.join();
+#endif
     return 0;
 }
