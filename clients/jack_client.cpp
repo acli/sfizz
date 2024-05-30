@@ -1,5 +1,5 @@
 // Copyright (c) 2019, Paul Ferrand
-// ALSA parts copyright (c) 2024, Ambrose Li
+// ALSA parts that are not copied from the original code copyright (c) 2024, Ambrose Li
 // All rights reserved.
 
 // Redistribution and use in source and binary forms, with or without
@@ -282,6 +282,24 @@ std::vector<std::string> stringTokenize(const std::string& str)
     return tokens;
 }
 
+#if SFIZZ_JACK_USE_ALSA
+void cliShowSynthGain() {
+    std::cout << synth.getVolume();
+}
+void cliSetSynthGain( std::string &val ) {
+    synth.setVolume(std::stof(val));
+}
+typedef struct {
+    const char *name;
+    void (*show)();
+    void (*set)(std::string &val);
+} settings_node_t;
+settings_node_t settings[] = {
+    { "synth.gain", cliShowSynthGain, cliSetSynthGain },
+    { NULL, NULL, NULL }
+};
+#endif
+
 void cliThreadProc()
 {
     const std::string whitespace = " \t";
@@ -324,6 +342,29 @@ void cliThreadProc()
             } catch (...) {
                 std::cout << "ERROR: Can't set num of voices!\n";
             }
+#if SFIZZ_JACK_USE_ALSA
+        } else if (kw == "gain") {
+            try {
+                std::lock_guard<SpinMutex> lock { processMutex };
+                synth.setVolume(stof(args));
+            } catch (...) {
+                std::cout << "ERROR: Can't set gain!\n";
+            }
+        } else if (kw == "settings") {
+            for (int i = 0; settings[i].name; ++i) {
+                std::cout << settings[i].name << ' ';
+                settings[i].show();
+                std::cout << '\n';
+            }
+        } else if (kw == "help") {
+            std::cout << "load_instrument file\n";
+            std::cout << "set_oversampling num\n";
+            std::cout << "set_reload_size num\n";
+            std::cout << "set_voices num\n";
+            std::cout << "settings\n";
+            std::cout << "help\n";
+            std::cout << "quit\n";
+#endif
         } else if (kw == "quit" || !std::cin) {
             shouldClose = true;
         } else if (kw.size() > 0) {
@@ -452,7 +493,7 @@ int main(int argc, char** argv)
     }
 
 #if SFIZZ_JACK_USE_ALSA
-    alsaMidiInputPort = snd_seq_create_simple_port(alsa_client, "Input", SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+    alsaMidiInputPort = snd_seq_create_simple_port(alsa_client, (clientName + " input").c_str(), SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
     if (alsaMidiInputPort < 0) {
         std::cerr << "Could not open ALSA MIDI input port: " << snd_strerror(alsaMidiInputPort) << '\n';
         return 1;
