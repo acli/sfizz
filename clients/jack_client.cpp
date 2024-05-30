@@ -351,7 +351,7 @@ void alsaThreadProc()
 
 #if SFIZZ_JACK_USE_ALSA
 ABSL_FLAG(std::string, client_name, "sfizz", "Jack/ALSA client name");
-ABSL_FLAG(std::string, port, "sfizz", "Connect to this MIDI input");
+ABSL_FLAG(std::string, port, "", "Connect to this MIDI input");
 #else
 ABSL_FLAG(std::string, client_name, "sfizz", "Jack client name");
 #endif
@@ -504,7 +504,6 @@ int main(int argc, char** argv)
                 return 1;
             }
         } else { // assume it's a JACK port
-            return 1;
             err = jack_connect(client, portName.c_str(), jack_port_name(midiInputPort));
             if (err) {
                 std::cerr << "Cannot connect to JACK input port " << portName << ": Error " << err << '\n';
