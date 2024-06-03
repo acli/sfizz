@@ -207,7 +207,7 @@ static volatile sig_atomic_t shouldClose { false };
 
 static void done(int sig)
 {
-    std::cout << "Signal received" << '\n';
+    std::cout << "Signal " << sig << " received" << '\n';
     shouldClose = true;
     (void)sig;
     // if (client != nullptr)
@@ -456,7 +456,7 @@ int main(int argc, char** argv)
 
 #if SFIZZ_JACK_USE_ALSA
     int err;
-    err = snd_seq_open(&alsa_client, "default", SND_SEQ_OPEN_INPUT, SND_SEQ_NONBLOCK);
+    err = snd_seq_open(&alsa_client, "default", SND_SEQ_OPEN_INPUT, 0); // do not use SND_SEQ_NONBLOCK, or the ALSA thread will spin
     if (err < 0) {
         std::cerr << "Could not open ALSA client: " << snd_strerror(err) << '\n';
         return 1;
@@ -582,7 +582,8 @@ int main(int argc, char** argv)
     jack_client_close(client);
     cli_thread.join();
 #if SFIZZ_JACK_USE_ALSA
-    alsa_thread.join();
+    // Don't bother to join(). The thread uses a blocking call and there's no way to synthesize a dummy event to unblock it.
+    //alsa_thread.join();
 #endif
     return 0;
 }
